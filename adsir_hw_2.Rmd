@@ -6,10 +6,10 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE) #warning = FALSE, message = FALSE)
 ```
 
-```{r}
+```{r warning = FALSE, message = FALSE}
 library(tidyverse) # for graphing and data cleaning
 library(tidymodels) # for modeling
 library(stacks) # for stacking models
@@ -20,5 +20,106 @@ library(vip) # for variable importance plots
 library(DALEX) # for model interpretation
 library(DALEXtra) # for extension of DALEX
 library(patchwork) # for combining plots nicely
+
+theme_set(theme_minimal()) # Lisa's favorite theme
 ```
+
+# Would you actually have this variable to predict with at the time you are going to make the prediction
+# Looking at removing variables with only one value (zero variance) (step_nzf should get rid of these observations)
+
+```{r}
+data("lending_club")
+# Data dictionary (as close as I could find): https://www.kaggle.com/wordsforthewise/lending-club/discussion/170691
+create_more_bad <- lending_club %>% 
+  filter(Class == "bad") %>% 
+  sample_n(size = 3000, replace = TRUE)
+
+lending_club_mod <- lending_club %>% 
+  bind_rows(create_more_bad) %>% 
+  rename(class = Class)
+```
+
+```{r}
+lending_club_mod %>% 
+  group_by(term) %>% 
+  summarize(n())
+```
+
+```{r}
+lending_club_mod %>% 
+  ggplot(aes(x = funded_amnt)) + geom_density()
+
+lending_club_mod %>% 
+  ggplot(aes(x = int_rate)) + geom_density()
+
+lending_club_mod %>% 
+  ggplot(aes(x = annual_inc)) + geom_density()
+
+lending_club_mod %>% 
+  ggplot(aes(x = total_bal_il)) + geom_density()
+
+lending_club_mod %>% 
+  group_by(class) %>% 
+  summarize(n())
+
+lending_club_mod %>% 
+  group_by(term) %>% 
+  summarize(n())
+
+lending_club_mod %>% 
+  group_by(addr_state) %>% 
+  summarize(n())
+
+
+lending_club_mod %>% 
+  group_by(sub_grade) %>% 
+  summarize(n())
+
+summary(lending_club_mod)
+```
+
+```{r}
+sum(is.na(lending_club_mod)) # counts the number of NA values for all variables
+```
+
+```{r}
+# checks for duplicate observations
+lending_club_mod %>% 
+  distinct()
+```
+
+```{r}
+set.seed(494)
+lending_club_split <- initial_split(lending_club_mod, prop = .75, strata = class)
+lending_club_train <- training(lending_club_split)
+lending_club_test <- testing(lending_club_split)
+```
+
+```{r}
+unique(lending_club_train$verification_status)
+```
+
+```{r}
+lending_club_recipe <- recipe(class ~ ., data = lending_club_train) %>% 
+  step_rm(acc_now_delinq, delinq_amnt) %>% 
+  step_mutate_at(verification_status, fn = ~replace(verification_status, verification_status == "Source_Verified", "Verified")) %>% 
+  step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 0, 9875), 1)) %>% 
+  step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 9876, 40125), 2)) %>% 
+  step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 40126, 85525), 3)) %>% 
+  step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 85526, 163300), 4)) %>% 
+  step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 163302, 207350), 5)) %>% 
+  step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 207351, 518400), 6)) %>% 
+  step_mutate_at(annual_inc, fn = ~replace(annual_inc, annual_inc > 518401, 7)) %>% 
+  step_mutate_at(annual_inc, fn = ~as.factor(.)) %>% 
+  step_mutate_at(all_numeric(), fn = ~as.numeric(.))
+
+lending_club_recipe %>% 
+  prep(lending_club_train) %>% 
+  juice()
+```
+
+-Make all integer variables numeric (I’d highly recommend using step_mutate_at() or this will be a lot of code). We’ll want to do this for the model interpretation we’ll do later.
+-Think about grouping factor variables with many levels.
+-Make categorical variables dummy variables (make sure NOT to do this to the outcome variable).
+-Normalize quantitative variables.
 
