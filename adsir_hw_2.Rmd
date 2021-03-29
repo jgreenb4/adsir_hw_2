@@ -1,0 +1,24 @@
+---
+title: "adsir_hw_2"
+author: "Jake Greenberg"
+date: "3/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse) # for graphing and data cleaning
+library(tidymodels) # for modeling
+library(stacks) # for stacking models
+library(naniar) # for examining missing values (NAs)
+library(lubridate) # for data manipulation
+library(moderndive) # for King Country housing data
+library(vip) # for variable importance plots
+library(DALEX) # for model interpretation
+library(DALEXtra) # for extension of DALEX
+library(patchwork) # for combining plots nicely
+```
+
