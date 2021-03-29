@@ -110,8 +110,10 @@ lending_club_recipe <- recipe(class ~ ., data = lending_club_train) %>%
   step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 163302, 207350), 5)) %>% 
   step_mutate_at(annual_inc, fn = ~replace(annual_inc, between(annual_inc, 207351, 518400), 6)) %>% 
   step_mutate_at(annual_inc, fn = ~replace(annual_inc, annual_inc > 518401, 7)) %>% 
-  step_mutate_at(annual_inc, fn = ~as.factor(.)) %>% 
-  step_mutate_at(all_numeric(), fn = ~as.numeric(.))
+  step_mutate_at(annual_inc, fn = ~as.factor(.)) %>%
+  step_mutate_at(all_numeric(), fn = ~as.numeric(.)) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_normalize(all_numeric())
 
 lending_club_recipe %>% 
   prep(lending_club_train) %>% 
