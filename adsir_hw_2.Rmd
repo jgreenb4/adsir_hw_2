@@ -346,7 +346,7 @@ knn_wf <-
   add_recipe(lending_club_recipe)
 
 # tune it using 4 tuning parameters
-knn_tune <- 
+lending_knn_tune <- 
   knn_wf %>% 
   tune_grid(
     lending_club_cv,
@@ -359,7 +359,50 @@ knn_tune <-
 
 16. Create a model stack with the candidate models from the previous parts of the exercise and use the blend_predictions() function to find the coefficients of the stacked model. Create a plot examining the performance metrics for the different penalty parameters to assure you have captured the best one. If not, adjust the penalty. (HINT: use the autoplot() function). Which models are contributing most?
 
+```{r}
+lending_club_stack <- 
+  stacks() %>% 
+  add_candidates(lending_club_lasso_tune) %>% 
+  add_candidates(lending_club_ranger_fit) %>% 
+  add_candidates(lending_club_knn_tune)
+```
+
+```{r}
+as_tibble(lending_club_stack)
+```
+
+```{r}
+lending_club_blend <- 
+  lending_club_stack %>% 
+  blend_predictions()
+
+lending_club_blend
+```
+
+```{r}
+lending_club_blend$metrics %>% 
+  filter(.metric == "rmse")
+```
+
+```{r}
+autoplot(lending_club_blend)
+```
+
+
+```{r}
+autoplot(house_blend, type = "funded_amnt")
+autoplot(house_blend, type = "weights")
+```
+
 17. Fit the final stacked model using fit_members(). Apply the model to the test data and report the accuracy and area under the curve. Create a graph of the ROC and construct a confusion matrix. Comment on what you see. Save this final model using the saveRDS() function - see the Use the model section of the tidymodels intro. We are going to use the model in the next part. You’ll want to save it in the folder where you create your shiny app.
+
+
+```{r}
+lending_club_final_stack <- lending_club_blend %>% 
+  fit_members()
+
+house_final_stack
+```
 
 
 # Coded Bias
