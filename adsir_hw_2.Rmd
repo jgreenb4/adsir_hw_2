@@ -20,6 +20,7 @@ library(vip) # for variable importance plots
 library(DALEX) # for model interpretation
 library(DALEXtra) # for extension of DALEX
 library(patchwork) # for combining plots nicely
+library(kknn)
 
 theme_set(theme_minimal()) # Lisa's favorite theme
 ```
@@ -233,18 +234,32 @@ lending_club_ranger_cv %>%
 ```
 
 
+
 11. Use functions from the `DALEX` and `DALEXtra` libraries to create a histogram and boxplot of the residuals from the training data. How do they look? Any interesting behavior?
 
-
 ```{r}
-best <- lending_club_ranger_cv %>% 
-  select_best(metric = "accuracy")
-lending_club_ranger_final_wf<- lending_club_ranger_wf %>% 
-  finalize_workflow(best)
+#best_lasso <- lending_club_cv %>% 
+  #select_best(metric = "accuracy")
+#lending_club_lasso_final_wf<- lending_club_lasso_wf %>% 
+  #finalize_workflow(best_lasso)
+
+#lending_club_lasso_explain <- 
+  #explain_tidymodels(
+    #model = lending_club_ranger_final_wf,
+    #data = lending_club_train %>% select(-Class), 
+    #y = lending_club_train %>%  pull(Class),
+    #label = "lasso"
+  #)
 ```
 
 
-11. Use functions from the `DALEX` and `DALEXtra` libraries to create a histogram and boxplot of the residuals from the training data. How do they look? Any interesting behavior?
+```{r}
+best_ranger <- lending_club_ranger_cv %>% 
+  select_best(metric = "accuracy")
+lending_club_ranger_final_wf<- lending_club_ranger_wf %>% 
+  finalize_workflow(best_ranger)
+```
+
 
 ```{r}
 set.seed(494)
@@ -255,10 +270,10 @@ lending_club_rf_explain <-
   explain_tidymodels(
     model = lending_club_ranger_fit,
     data = lending_club_train %>% select(-Class), 
-    y = as.numeric(lending_club_train$Class == "good)",
+    y = as.numeric(lending_club_train$Class == "good"),
     label = "rf",
     type = "classification"
-  ))
+  )
 
 lending_club_rf_mod_perf <-  model_performance(lending_club_rf_explain)
 hist_plot <- 
@@ -271,20 +286,29 @@ hist_plot + box_plot
 ```
 
 
-
-
 12. Use `DALEX` functions to create a variable importance plot from this model. What are the most important variables? 
 
 ```{r}
 lending_club_rf_var_imp <- 
-  model_parts(
-    lending_club_rf_explain
-    )
+  model_parts(lending_club_rf_explain)
+
 plot(lending_club_rf_var_imp)
 ```
 
-
 13. Write a function called `cp_profile` to make a CP profile. The function will take an explainer, a new observation, and a variable name as its arguments and create a CP profile for a quantitative predictor variable. You will need to use the `predict_profile()` function inside the function you create - put the variable name there so the plotting part is easier. You'll also want to use `aes_string()` rather than `aes()` and quote the variables. Use the `cp_profile()` function to create one CP profile of your choosing. Be sure to choose a variable that is numeric, not integer. There seem to be issues with those that I'm looking into.
+
+```{r}
+cp_profile <- function(explainer, new_observation, variable_name) {
+  predict_profile(explainer = explainer, new_observation = new_observation) %>% 
+  ggplot(aes_string(x = variable_name, y = `_yhat_`)) +
+    geom_line()
+}
+```
+
+```{r}
+cp_profile(explainer = lending_club_rf_explain, new_observation = lending_club_train %>% 
+             slice_sample(), variable_name = int_rate)
+```
 
 For an extra challenge, write a function that will work for either a quantitative or categorical variable. 
 
@@ -293,7 +317,49 @@ If you need help with function writing check out the [Functions](https://r4ds.ha
 
 14. Use `DALEX` functions to create partial dependence plots (with the CP profiles in gray) for the 3-4 most important variables. If the important variables are categorical, you can instead make a CP profile for 3 observations in the dataset and discuss how you could go about constructing a partial dependence plot for a categorical variable (you don't have to code it, but you can if you want an extra challenge). If it ever gives you an error that says, "Error: Can't convert from `VARIABLE` <double> to `VARIABLE` <integer> due to loss of precision", then remove that variable from the list. I seem to have figured out why it's doing that, but I don't know how to fix it yet.
 
+```{r}
+set.seed(494) # since we take a sample of 100 obs
+# This takes a while to run. 
+# If we only want to examine a few variables, add variables argument to model_profile.
+rf_pdp <- model_profile(explainer = lending_club_rf_explain)
+
+plot(rf_pdp, 
+     variables = "funded_amnt",
+     geom = "profiles")
+```
+
 15. Fit one more model type of your choosing that will feed into the stacking model. 
+
+```{r}
+# create a model definition
+knn_mod <-
+  nearest_neighbor(
+    neighbors = tune("k")
+  ) %>%
+  set_engine("kknn") %>% 
+  set_mode("classification")
+
+# create the workflow
+knn_wf <- 
+  workflow() %>% 
+  add_model(knn_mod) %>%
+  add_recipe(lending_club_recipe)
+
+# tune it using 4 tuning parameters
+knn_tune <- 
+  knn_wf %>% 
+  tune_grid(
+    lending_club_cv,
+    metrics = metric,
+    grid = 4,
+    control = ctrl_grid
+  )
+```
+
+
+16. Create a model stack with the candidate models from the previous parts of the exercise and use the blend_predictions() function to find the coefficients of the stacked model. Create a plot examining the performance metrics for the different penalty parameters to assure you have captured the best one. If not, adjust the penalty. (HINT: use the autoplot() function). Which models are contributing most?
+
+17. Fit the final stacked model using fit_members(). Apply the model to the test data and report the accuracy and area under the curve. Create a graph of the ROC and construct a confusion matrix. Comment on what you see. Save this final model using the saveRDS() function - see the Use the model section of the tidymodels intro. We are going to use the model in the next part. You’ll want to save it in the folder where you create your shiny app.
 
 
 # Coded Bias
