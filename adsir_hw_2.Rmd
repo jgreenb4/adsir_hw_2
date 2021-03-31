@@ -206,18 +206,97 @@ lending_club_ranger_wf
 ```
 
 
-
 ```{r}
 set.seed(494)
 rf_grid <- grid_regular(min_n(), finalize(mtry(), lending_training %>% select(-Class)), levels = 3)
+
 ctrl_res <- control_stack_grid()
 lending_club_ranger_cv <- lending_club_ranger_wf %>% 
   tune_grid(resamples = lending_club_cv,
            grid = rf_grid,
            control = ctrl_res)
+
 collect_metrics(lending_club_ranger_cv)
+```
+
+10.
+
+```{r}
+lending_club_ranger_cv %>% 
+  show_best(metric = "accuracy")
+```
+
+```{r}
+lending_club_ranger_cv %>% 
+  collect_metrics() %>% 
+  filter(.config == "Preprocessor1_Model4")
+```
+
+
+11. Use functions from the `DALEX` and `DALEXtra` libraries to create a histogram and boxplot of the residuals from the training data. How do they look? Any interesting behavior?
+
+
+```{r}
+best <- lending_club_ranger_cv %>% 
+  select_best(metric = "accuracy")
+lending_club_ranger_final_wf<- lending_club_ranger_wf %>% 
+  finalize_workflow(best)
+```
+
+
+11. Use functions from the `DALEX` and `DALEXtra` libraries to create a histogram and boxplot of the residuals from the training data. How do they look? Any interesting behavior?
+
+```{r}
+set.seed(494)
+lending_club_ranger_fit <- lending_club_ranger_final_wf %>% 
+  fit(lending_club_train)
+
+lending_club_rf_explain <- 
+  explain_tidymodels(
+    model = lending_club_ranger_fit,
+    data = lending_club_train %>% select(-Class), 
+    y = as.numeric(lending_club_train$Class == "good)",
+    label = "rf",
+    type = "classification"
+  ))
+
+lending_club_rf_mod_perf <-  model_performance(lending_club_rf_explain)
+hist_plot <- 
+  plot(lending_club_rf_mod_perf, 
+       geom = "histogram")
+box_plot <-
+  plot(lending_club_rf_mod_perf, 
+       geom = "boxplot")
+hist_plot + box_plot
 ```
 
 
 
 
+12. Use `DALEX` functions to create a variable importance plot from this model. What are the most important variables? 
+
+```{r}
+lending_club_rf_var_imp <- 
+  model_parts(
+    lending_club_rf_explain
+    )
+plot(lending_club_rf_var_imp)
+```
+
+
+13. Write a function called `cp_profile` to make a CP profile. The function will take an explainer, a new observation, and a variable name as its arguments and create a CP profile for a quantitative predictor variable. You will need to use the `predict_profile()` function inside the function you create - put the variable name there so the plotting part is easier. You'll also want to use `aes_string()` rather than `aes()` and quote the variables. Use the `cp_profile()` function to create one CP profile of your choosing. Be sure to choose a variable that is numeric, not integer. There seem to be issues with those that I'm looking into.
+
+For an extra challenge, write a function that will work for either a quantitative or categorical variable. 
+
+If you need help with function writing check out the [Functions](https://r4ds.had.co.nz/functions.html) chapter of R4DS by Wickham and Grolemund.
+
+
+14. Use `DALEX` functions to create partial dependence plots (with the CP profiles in gray) for the 3-4 most important variables. If the important variables are categorical, you can instead make a CP profile for 3 observations in the dataset and discuss how you could go about constructing a partial dependence plot for a categorical variable (you don't have to code it, but you can if you want an extra challenge). If it ever gives you an error that says, "Error: Can't convert from `VARIABLE` <double> to `VARIABLE` <integer> due to loss of precision", then remove that variable from the list. I seem to have figured out why it's doing that, but I don't know how to fix it yet.
+
+15. Fit one more model type of your choosing that will feed into the stacking model. 
+
+
+# Coded Bias
+----------------------
+
+I thought that the entirety of the Coded Bias film was extremely well-done and thought-provoking. As discussed at length in the Bias and Fairness lecture from Dr. Rachel Thomas, I thought that the issues of sub-group under-representation in the facial recognition software of many different technological kingpins illustrate a far larger scope on the issues of bias in data science and algorithms. I was particularly enticed by the discussion of China/Hong Kong and how the Chinese government exploits the abundance of individual-level data on the protestors to reinforce its oppressive and censoring authority, but also how the protestors in Hong Kong fought back by spray painting over the cameras that could be used to collect information about the identities of the participating protestors. I also felt indecesive about my stance on the government collecting all of this intel about each member of society throughout my viewing of this film; while much of the predatory comercial information that is collected for advertisement targeting may be invasive and violate privacy to a degree, the thoroughness and frequency of this data collection/monitoring for individuals may boast public safety benefits by signaling when someone could be a high risk to commit a violent crime-- assuming that these companies are eventually able to build non-biased models for evaluating this risk that could ultimately be ethically deployed. I also found the overarching topic of our current reality versus the society we strive to be as an imperative topic to consider when creating an algorithm; just because a model's results may perform well at automating manual processes and results, that does not necessarily mean that it is prioritizing the proper ideals. An example of this is the AI tool that Amazon built to sift through resumes which rejected all resumes from women, a direct refelction of the underepresentation of this demographic in their typical hired candidates.
